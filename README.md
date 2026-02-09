@@ -12,4 +12,5 @@ Streamlit app for exploratory astrophysics visualizations using Gaia DR3 and the
 
 ## Run locally
 pip install -r requirements.txt
+
 streamlit run app.py

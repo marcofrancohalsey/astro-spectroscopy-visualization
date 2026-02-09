@@ -42,50 +42,79 @@ def make_bpt_density_fig(
     plot_df: pd.DataFrame,
     nbinsx: int = 700,
     nbinsy: int = 700,
-    x_range = (-2.0, 0.5),
-    y_range = (-1, 1.5),
-    title: str = "BPT Diagram (SDSS) — Density",        
+    x_range=(-2.0, 0.5),
+    y_range=(-1, 1.5),
+    title: str = "BPT diagnostic diagram — Sloan Digital Sky Survey density map",
 ):
-    """ Return a Plotly density heatmap figure for BPT diagram. """
+    """Return a styled Plotly density heatmap figure for the BPT diagram."""
+
     fig = px.density_heatmap(
         plot_df,
         x="log_NII_Ha",
         y="log_OIII_Hb",
         nbinsx=nbinsx,
         nbinsy=nbinsy,
-        title=title
     )
 
+    # --- Layout general (dark astro style)
     fig.update_layout(
-        template="simple_white",
-        width=700,
-        height=500,
+        width=720,
+        height=720,
         plot_bgcolor="black",
         paper_bgcolor="black",
+
+        # --- Título centrado y visible
+        title=dict(
+            text=title,
+            x=0.5,
+            xanchor="center",
+            font=dict(
+                size=24,
+                color="white"
+            )
+        ),
+
+        # --- Colorbar styling
         coloraxis=dict(
             colorscale=INFERNO_PINK_FADE,
             cmin=1,
-            colorbar=dict(title="counts")
-        )
-    )
-    fig.update_xaxes(
-        range=list(x_range),
-        title="log([NII] 6584 / Hα)",
-        showline=True,
-        linecolor="black",
-        ticks="outside",
-        showgrid=True,
-        gridcolor="rgba(0,0,0,0.10)"
+            colorbar=dict(
+                title="counts",
+                title_font=dict(color="white"),
+                tickfont=dict(color="white")
+            )
+        ),
+
+        margin=dict(t=80, l=60, r=40, b=60),
+        font=dict(color="white")
     )
 
+    # --- Eje X
+    fig.update_xaxes(
+        range=list(x_range),
+        title="log([N II] λ6584 / Hα)",
+        title_font=dict(size=14, color="white"),
+        tickfont=dict(color="white"),
+        showline=True,
+        linecolor="white",
+        ticks="outside",
+        tickcolor="white",
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.15)"
+    )
+
+    # --- Eje Y
     fig.update_yaxes(
         range=list(y_range),
-        title="log([OIII] 5007 / Hβ)",
+        title="log([O III] λ5007 / Hβ)",
+        title_font=dict(size=14, color="white"),
+        tickfont=dict(color="white"),
         showline=True,
-        linecolor="black",
+        linecolor="white",
         ticks="outside",
+        tickcolor="white",
         showgrid=True,
-        gridcolor="rgba(0,0,0,0.10)"
+        gridcolor="rgba(255,255,255,0.15)"
     )
 
     return fig

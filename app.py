@@ -16,12 +16,14 @@ from hr_diagram import (
     make_topn_bar_fig
 )
 
-# --- Page config (siempre al inicio)
+# Must execute before any other Streamlit call
 st.set_page_config(
     page_title="Astro Spectroscopy Visualization",
     page_icon="🔭",
     layout="wide"
 )
+
+# Global padding for wide-layout readability
 st.markdown(
     """
     <style>
@@ -37,9 +39,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ============================================================
-# HERO (título + subtítulo) centrado
-# ============================================================
+# Custom hero header (HTML for centering + typography control)
 st.markdown(
     """
     <div style="text-align:center; padding: 10px 0 20px 0;">
@@ -51,67 +51,65 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 st.divider()
 
-# ============================================================
-# CARGA DE DATOS (arriba, una sola vez)
-# ============================================================
+# Load datasets once; reused across tabs
 df_sdss = pd.read_csv("sdss_galaxies.csv")
 df_stars = pd.read_csv("gaia_stars.csv")
 
-# ============================================================
-# TABS PRINCIPALES
-# ============================================================
-tab_gaia, tab_sdss, tab_rankings = st.tabs(["🌌 Gaia (HR)", "🛰️ SDSS (BPT)", "🏆 Rankings & Summary"])
+# Main navigation
+tab_gaia, tab_sdss, tab_rankings = st.tabs(
+    ["🌌 Gaia (HR)", "🛰️ SDSS (BPT)", "🏆 Rankings & Summary"]
+)
 
-# ============================================================
-# TAB 1 — GAIA
-# ============================================================
 with tab_gaia:
     st.header("Hertzsprung–Russell Diagrams (Gaia DR3)")
 
-    # --- KPIs rápidos
+    # Dataset snapshot for quick sanity checks
     k1, k2, k3 = st.columns(3)
     k1.metric("Rows", f"{len(df_stars):,}")
     k2.metric("Columns", f"{df_stars.shape[1]}")
     k3.metric("Missing Teff", f"{df_stars['teff_gspphot'].isna().sum():,}")
 
-    # --- Data table (toggle)
+    # Optional full table view
     show_gaia_table = st.checkbox("Show Gaia dataset", value=True)
-
     if show_gaia_table:
-        c1, c2, c3 = st.columns([1, 3, 1])  # centra la tabla
+        c1, c2, c3 = st.columns([1, 3, 1])
         with c2:
             st.dataframe(df_stars, use_container_width=True)
 
     st.divider()
     st.subheader("HR Density Map")
 
+    # Filter to the subset used by the HR density plot (finite, plot-ready rows)
     hr_df = compute_hr_df(df_stars)
-
     st.write(f"Valid stars after filtering: **{len(hr_df):,}** / {len(df_stars):,}")
 
     fig_hr = make_hr_density_fig(hr_df, nbinsx=700, nbinsy=700)
-
-    c1, c2, c3 = st.columns([1,1.5,1])
+    c1, c2, c3 = st.columns([1, 1.5, 1])
     with c2:
         st.plotly_chart(fig_hr, use_container_width=True)
+
     st.info(
         """Density map of 100,000 Gaia DR3 stars within a spherical volume of radius 500 pc centered on the Solar System, 
         displayed in the color–absolute magnitude diagram. The color scale indicates stellar number density, 
         revealing evolutionary sequences such as the main sequence and the giant branch."""
     )
-    st.divider()
 
+    st.divider()
     st.subheader("Physical HR Diagram and Spectral Type Distribution — Gaia DR3")
 
-    # --- Controls row (horizontal)
+    # Controls define a reproducible sample shared by both panels
     ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 2])
 
     with ctrl1:
         n_stars = st.slider(
             "Stars to sample",
-            1000, len(df_stars), min(25000, len(df_stars)), 1000,
+            1000,
+            len(df_stars),
+            min(25000, len(df_stars)),
+            1000,
             key="linked_sample_n"
         )
 
@@ -128,20 +126,22 @@ with tab_gaia:
         color_mode = st.radio(
             "Color physical HR by",
             options=["spectral", "mass"],
-            format_func=lambda x: "Spectral type (OBAFGKM)" if x == "spectral" else "Mass (continuous)",
+            format_func=lambda x:
+                "Spectral type (OBAFGKM)" if x == "spectral" else "Mass (continuous)",
             horizontal=True,
             key="linked_phys_color"
         )
 
     df_subset = df_stars.sample(n=n_stars, random_state=int(seed)).copy()
 
-    # --- Two plots with equal dimensions + spacing
-    left, spacer, right = st.columns([1, 0.08, 1])  # spacer creates a visible gap
-
-    PANEL_HEIGHT = 650  # same height for both panels
+    # Side-by-side panels with matched height for direct comparison
+    left, spacer, right = st.columns([1, 0.08, 1])
+    PANEL_HEIGHT = 650
 
     with left:
         st.markdown("Physical HR diagram")
+
+        # Compute physical quantities for the bubble plot version
         df_phys = compute_physical_hr_df(df_subset)
 
         fig_phys_hr = make_physical_hr_bubble_fig(
@@ -158,12 +158,13 @@ with tab_gaia:
     with right:
         st.markdown("Spectral type histogram")
 
+        # Teff availability limits which stars can be assigned a spectral type
         valid = df_subset["teff_gspphot"].notna().sum()
         st.markdown(f"Stars with valid Teff: **{valid:,}** / {n_stars:,}")
 
         fig_spec = make_spectral_histogram(df_subset)
         fig_spec.update_layout(
-            height=PANEL_HEIGHT,  # same height as left plot
+            height=PANEL_HEIGHT,
             margin=dict(l=40, r=25, t=60, b=45)
         )
         st.plotly_chart(fig_spec, use_container_width=True)
@@ -174,10 +175,9 @@ with tab_gaia:
     )
 
     st.divider()
-
-    # --- Distribuciones como “gallery” (2 columnas)
     st.subheader("Stellar Parameter Distributions")
 
+    # Sampling keeps the UI responsive for large Gaia tables
     n_stars_hist = st.slider(
         "Stars for histograms",
         min_value=5000,
@@ -190,6 +190,7 @@ with tab_gaia:
 
     df_hist = df_stars.sample(n=n_stars_hist, random_state=8041)
 
+    # Precompute figures once; the multiselect controls what gets rendered
     figs = {
         "Mass": make_gaia_histogram_fig(df_hist, "mass_flame", nbins=bins),
         "Effective Temperature": make_gaia_histogram_fig(df_hist, "teff_gspphot", nbins=bins),
@@ -211,10 +212,9 @@ with tab_gaia:
             st.plotly_chart(figs[name], use_container_width=True)
 
     st.divider()
-
-    # --- Treemap centrado
     st.subheader("Stellar Demographics in the Solar Neighborhood")
 
+    # Category assignment requires a sample; N trades off detail vs speed
     n_tree = st.slider(
         "Stars to include",
         min_value=1000,
@@ -224,9 +224,7 @@ with tab_gaia:
         key="tree_n"
     )
 
-    df_cat = add_gaia_categories(
-        df_stars.sample(n=n_tree, random_state=42)
-    )
+    df_cat = add_gaia_categories(df_stars.sample(n=n_tree, random_state=42))
 
     fig_tree = make_gaia_treemap_fig(
         df_cat,
@@ -237,22 +235,20 @@ with tab_gaia:
     with c2:
         st.plotly_chart(fig_tree, use_container_width=True)
 
-# ============================================================
-# TAB 2 — SDSS (BPT)
-# ============================================================
 with tab_sdss:
     st.header("BPT Diagnostic Diagram (Sloan Digital Sky Survey)")
 
-    # --- KPIs rápidos
+    # Dataset snapshot focused on key emission-line availability
     k1, k2, k3 = st.columns(3)
     k1.metric("Rows", f"{len(df_sdss):,}")
     k2.metric("Columns", f"{df_sdss.shape[1]}")
     k3.metric(
         "Missing Hα",
-        f"{df_sdss['h_alpha_flux'].isna().sum():,}" if "h_alpha_flux" in df_sdss.columns else "—"
+        f"{df_sdss['h_alpha_flux'].isna().sum():,}"
+        if "h_alpha_flux" in df_sdss.columns else "—"
     )
 
-    # --- Data table (toggle) + slider (mismo bloque)
+    # Table preview controls
     cA, cB = st.columns([1, 1])
     with cA:
         show_sdss_table = st.checkbox("Show SDSS dataset", value=True)
@@ -260,19 +256,19 @@ with tab_sdss:
         sdss_rows = st.slider("Rows to display", 5, 200, 25, 5, key="sdss_rows")
 
     if show_sdss_table:
-        c1, c2, c3 = st.columns([1, 11, 1])  # centra la tabla
+        c1, c2, c3 = st.columns([1, 11, 1])
         with c2:
             st.dataframe(df_sdss.head(sdss_rows), use_container_width=True)
 
     st.divider()
     st.subheader("BPT Density Map")
 
+    # Compute log-ratio space with positivity/finite checks for safe logs
     bpt_df = compute_bpt_df(df_sdss)
     st.write(f"Valid points after filtering: **{len(bpt_df):,}** / {len(df_sdss):,}")
 
     fig_bpt = make_bpt_density_fig(bpt_df, nbinsx=700, nbinsy=700)
-
-    c1, c2, c3 = st.columns([1, 5, 1])  # mismo centrado que Gaia
+    c1, c2, c3 = st.columns([1, 5, 1])
     with c2:
         st.plotly_chart(fig_bpt, use_container_width=True)
 
@@ -284,7 +280,7 @@ with tab_sdss:
 
     st.divider()
 
-    # --- Column statistics (opcional, equivalente a "explorer" pero sin ensuciar)
+    # Quick per-column diagnostics without leaving the app
     show_sdss_stats = st.checkbox("Show SDSS column statistics", value=True)
     if show_sdss_stats:
         col_sdss = st.selectbox("Inspect SDSS column", df_sdss.columns, key="sdss_column")
@@ -292,33 +288,43 @@ with tab_sdss:
         with c2:
             st.write(df_sdss[col_sdss].describe())
 
-# ============================================================
-# TAB 3 — Rankings
-# ============================================================
 with tab_rankings:
     st.header("Stellar Property Rankings (Gaia DR3)")
 
+    # Shared ranking depth across metrics
     top_n = st.slider("Select ranking depth", 5, 50, 10, 1, key="topn")
 
     tab1, tab2, tab3 = st.tabs(["Most luminous", "Most massive", "Largest"])
 
     with tab1:
-        fig = make_topn_bar_fig(df_stars, metric="lum_flame", top_n=top_n,
-                                title=f"Top {top_n} Most luminous stars (L☉)")
+        fig = make_topn_bar_fig(
+            df_stars,
+            metric="lum_flame",
+            top_n=top_n,
+            title=f"Top {top_n} Most luminous stars (L☉)"
+        )
         c1, c2, c3 = st.columns([1, 3, 1])
         with c2:
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        fig = make_topn_bar_fig(df_stars, metric="mass_flame", top_n=top_n,
-                                title=f"Top {top_n} Most massive stars (M☉)")
+        fig = make_topn_bar_fig(
+            df_stars,
+            metric="mass_flame",
+            top_n=top_n,
+            title=f"Top {top_n} Most massive stars (M☉)"
+        )
         c1, c2, c3 = st.columns([1, 3, 1])
         with c2:
             st.plotly_chart(fig, use_container_width=True)
 
     with tab3:
-        fig = make_topn_bar_fig(df_stars, metric="radius_gspphot", top_n=top_n,
-                                title=f"Top {top_n} largest stars (R☉)")
+        fig = make_topn_bar_fig(
+            df_stars,
+            metric="radius_gspphot",
+            top_n=top_n,
+            title=f"Top {top_n} largest stars (R☉)"
+        )
         c1, c2, c3 = st.columns([1, 3, 1])
         with c2:
             st.plotly_chart(fig, use_container_width=True)

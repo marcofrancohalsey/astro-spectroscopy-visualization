@@ -14,3 +14,8 @@ Streamlit app for exploratory astrophysics visualizations using Gaia DR3 and the
 pip install -r requirements.txt
 
 streamlit run app.py
+
+## Run on Render
+
+Access the deployed app here:
+https://astro-spectroscopy-visualization.onrender.com

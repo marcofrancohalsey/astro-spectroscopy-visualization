@@ -2,6 +2,10 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 
+
+# Custom density colorscale.
+# High-density regions transition from white → saturated pink → warm fade,
+# preserving contrast without saturating the map.
 INFERNO_PINK_FADE = [
     [0.00, "white"],
     [0.02, "#ff007f"], [0.06, "#ff1a8c"], [0.10, "#ff3399"], [0.14, "#ff4da6"],
@@ -12,6 +16,7 @@ INFERNO_PINK_FADE = [
     [0.97, "#fffefc"], [0.99, "#ffffff"], [1.00, "#fffffb"]
 ]
 
+
 def compute_bpt_df(
     df: pd.DataFrame,
     col_nii: str = "nii_6584_flux",
@@ -19,15 +24,28 @@ def compute_bpt_df(
     col_oiii: str = "oiii_5007_flux",
     col_hb: str = "h_beta_flux",
 ) -> pd.DataFrame:
-    """ Return a dataframe with log ratios for BPT diagram plotting. """
+    """
+    Compute logarithmic emission-line ratios for the BPT diagnostic diagram.
+
+    Ratios:
+        x = log10([N II] λ6584 / Hα)
+        y = log10([O III] λ5007 / Hβ)
+
+    Only finite, strictly positive ratios are retained to ensure
+    numerical stability in log space and density binning.
+    """
+
+    # Convert flux columns to numeric, coercing invalid entries to NaN
     nii = pd.to_numeric(df[col_nii], errors="coerce")
     ha = pd.to_numeric(df[col_ha], errors="coerce")
     oiii = pd.to_numeric(df[col_oiii], errors="coerce")
     hb = pd.to_numeric(df[col_hb], errors="coerce")
 
+    # Line ratios defining the BPT phase space
     ratio_x = nii / ha
     ratio_y = oiii / hb
 
+    # Log transform requires positive, finite inputs
     mask = (
         np.isfinite(ratio_x) & (ratio_x > 0) &
         np.isfinite(ratio_y) & (ratio_y > 0)
@@ -36,7 +54,11 @@ def compute_bpt_df(
     x = np.log10(ratio_x[mask])
     y = np.log10(ratio_y[mask])
 
-    return pd.DataFrame({"log_NII_Ha": x, "log_OIII_Hb": y})
+    return pd.DataFrame({
+        "log_NII_Ha": x,
+        "log_OIII_Hb": y
+    })
+
 
 def make_bpt_density_fig(
     plot_df: pd.DataFrame,
@@ -46,7 +68,12 @@ def make_bpt_density_fig(
     y_range=(-1, 1.5),
     title: str = "BPT diagnostic diagram — Sloan Digital Sky Survey density map",
 ):
-    """Return a styled Plotly density heatmap figure for the BPT diagram."""
+    """
+    Render a density heatmap of galaxies in BPT log-ratio space.
+
+    High bin counts highlight the star-forming sequence,
+    composite region, and AGN/LINER branches.
+    """
 
     fig = px.density_heatmap(
         plot_df,
@@ -56,30 +83,27 @@ def make_bpt_density_fig(
         nbinsy=nbinsy,
     )
 
-    # --- Layout general (dark astro style)
+    # Dark canvas improves contrast for high-density structures
     fig.update_layout(
         width=720,
         height=720,
         plot_bgcolor="black",
         paper_bgcolor="black",
 
-        # --- Título centrado y visible
+        # Centered title for symmetry in square layout
         title=dict(
             text=title,
             x=0.5,
             xanchor="center",
-            font=dict(
-                size=24,
-                color="white"
-            )
+            font=dict(size=24, color="white")
         ),
 
-        # --- Colorbar styling
+        # Shared color axis for density encoding
         coloraxis=dict(
             colorscale=INFERNO_PINK_FADE,
             cmin=1,
             colorbar=dict(
-                title="counts",
+                title="Counts",
                 title_font=dict(color="white"),
                 tickfont=dict(color="white")
             )
@@ -89,7 +113,7 @@ def make_bpt_density_fig(
         font=dict(color="white")
     )
 
-    # --- Eje X
+    # X-axis: metallicity proxy via [N II]/Hα
     fig.update_xaxes(
         range=list(x_range),
         title="log([N II] λ6584 / Hα)",
@@ -103,7 +127,7 @@ def make_bpt_density_fig(
         gridcolor="rgba(255,255,255,0.15)"
     )
 
-    # --- Eje Y
+    # Y-axis: ionization strength via [O III]/Hβ
     fig.update_yaxes(
         range=list(y_range),
         title="log([O III] λ5007 / Hβ)",

@@ -4,7 +4,7 @@ import plotly.express as px
 
 
 # Custom density colorscale.
-# High-density regions transition from white → saturated pink → warm fade,
+# High-density regions transition from white -> saturated pink -> warm fade,
 # preserving contrast without saturating the map.
 INFERNO_PINK_FADE = [
     [0.00, "white"],

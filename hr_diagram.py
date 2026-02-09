@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 
+# Custom colorscale used across density plots
 INFERNO_PINK_FADE = [
     [0.00, "white"],
     [0.02, "#ff007f"], [0.06, "#ff1a8c"], [0.10, "#ff3399"], [0.14, "#ff4da6"],
@@ -13,13 +14,10 @@ INFERNO_PINK_FADE = [
 ]
 
 
-# ============================================================
-# SPECTRAL CLASSIFICATION
-# ============================================================
-
 def classify_spectral_type(teff: float) -> str:
-    """Return approximate spectral type from effective temperature."""
-    
+    """
+    Map effective temperature (K) to a coarse OBAFGKM spectral class.
+    """
     if teff > 30000:
         return "O"
     elif teff > 10000:
@@ -43,13 +41,18 @@ def compute_hr_df(
     col_bp_rp: str = "bp_rp",
 ) -> pd.DataFrame:
     """
-    Return a dataframe with BP-RP color and absolute G magnitude (M_G).
-    Assumes parallax is in mas.
+    Compute HR-diagram coordinates from Gaia columns.
+
+    Returns bp_rp and absolute magnitude M_G. Parallax is assumed to be in mas:
+        M_G = G + 5 log10(parallax_mas) - 10
+
+    Rows are filtered to finite values and positive parallax to keep the transform valid.
     """
     parallax = pd.to_numeric(df[col_parallax], errors="coerce")
     gmag = pd.to_numeric(df[col_gmag], errors="coerce")
     bp_rp = pd.to_numeric(df[col_bp_rp], errors="coerce")
 
+    # Positive parallax is required for the distance-modulus form used here
     mask = (
         np.isfinite(parallax) & (parallax > 0) &
         np.isfinite(gmag) &
@@ -60,10 +63,10 @@ def compute_hr_df(
     gmag = gmag[mask]
     bp_rp = bp_rp[mask]
 
-    # M_G = G + 5 log10(parallax_mas) - 10
     M_G = gmag + 5*np.log10(parallax) - 10
 
     return pd.DataFrame({"bp_rp": bp_rp, "M_G": M_G})
+
 
 def make_hr_density_fig(
     hr_df: pd.DataFrame,
@@ -83,19 +86,26 @@ def make_hr_density_fig(
         title=title,
     )
 
-    # --- Global layout (clean + readable)
+    # Layout tuned for readability; Streamlit controls width via use_container_width
     fig.update_layout(
         template="none",
-        height=650,  # deja que Streamlit controle el ancho con use_container_width
+        height=650,
         margin=dict(l=90, r=60, t=90, b=80),
         font=dict(size=14, color="black"),
-        title=dict(x=0.5, xanchor="center", y=0.98, yanchor="top", pad=dict(t=10), font=dict(size=18, color="black")),
+        title=dict(
+            x=0.5,
+            xanchor="center",
+            y=0.98,
+            yanchor="top",
+            pad=dict(t=10),
+            font=dict(size=18, color="black")
+        ),
         coloraxis=dict(
             colorscale=INFERNO_PINK_FADE,
             cmin=1,
             colorbar=dict(
                 title="Star count",
-                title_font=dict(size=14, color="black"),  # ✅ correcto
+                title_font=dict(size=14, color="black"),
                 tickfont=dict(size=12, color="black"),
                 tickformat=",",
                 len=0.85,
@@ -105,7 +115,6 @@ def make_hr_density_fig(
         ),
     )
 
-    # --- X axis
     fig.update_xaxes(
         range=list(x_range),
         title="BP − RP Color index",
@@ -123,7 +132,6 @@ def make_hr_density_fig(
         title_font=dict(color="black")
     )
 
-    # --- Y axis (inverted by range)
     fig.update_yaxes(
         range=list(y_range),
         title="Absolute Magnitude (M_G)",
@@ -141,7 +149,7 @@ def make_hr_density_fig(
         title_font=dict(color="black")
     )
 
-    # --- Hover (más claro)
+    # Hover reports HR coordinates + bin count for density heatmap
     fig.update_traces(
         hovertemplate=(
             "BP − RP: %{x:.3f}<br>"
@@ -153,21 +161,15 @@ def make_hr_density_fig(
     return fig
 
 
-# ============================================================
-# SPECTRAL HISTOGRAM
-# ============================================================
-
 def make_spectral_histogram(df: pd.DataFrame):
     """Return bar chart of star counts by spectral type (white theme)."""
-
     df_spec = df.copy()
 
+    # Spectral assignment relies on Teff; restrict to finite entries
     mask = np.isfinite(df_spec["teff_gspphot"])
     df_spec = df_spec[mask]
 
-    df_spec["spectral_type"] = df_spec["teff_gspphot"].apply(
-        classify_spectral_type
-    )
+    df_spec["spectral_type"] = df_spec["teff_gspphot"].apply(classify_spectral_type)
 
     order = ["O", "B", "A", "F", "G", "K", "M"]
 
@@ -178,7 +180,6 @@ def make_spectral_histogram(df: pd.DataFrame):
         .fillna(0)
         .reset_index()
     )
-
     counts.columns = ["spectral_type", "count"]
 
     fig = px.bar(
@@ -189,7 +190,7 @@ def make_spectral_histogram(df: pd.DataFrame):
         text="count"
     )
 
-    # --- Bar labels
+    # Bar labels are placed outside; cliponaxis=False prevents truncation
     fig.update_traces(
         texttemplate="%{text:,}",
         textposition="outside",
@@ -199,29 +200,23 @@ def make_spectral_histogram(df: pd.DataFrame):
         marker_line_width=0.5
     )
 
-    # --- Layout (white background)
     fig.update_layout(
         template="none",
         height=650,
         margin=dict(l=95, r=40, t=70, b=60),
-
         plot_bgcolor="white",
         paper_bgcolor="white",
-
         font=dict(color="black"),
-
         title=dict(
             x=0.5,
             xanchor="center",
             font=dict(color="black", size=16),
         ),
-
         xaxis_title="<b>Spectral Type</b>",
         yaxis_title="<b>Star Count</b>",
         showlegend=False
     )
 
-    # --- Axes styling (full frame + ticks)
     fig.update_xaxes(
         showline=True,
         linecolor="black",
@@ -255,21 +250,24 @@ def make_spectral_histogram(df: pd.DataFrame):
     )
 
     return fig
-# ============================================================
-# PHYSICAL HR DIAGRAM
-# ============================================================
+
 
 def compute_physical_hr_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Return a cleaned dataframe for the physical HR bubble chart."""
+    """
+    Prepare a clean dataframe for the physical HR bubble chart.
+
+    Required inputs are Teff, luminosity, and radius (positive/finite). Mass and distance
+    are preserved for hover/context if present.
+    """
     out = df.copy()
 
-    # Coerce numeric columns
+    # Coerce expected numeric columns; invalid entries become NaN
     num_cols = ["teff_gspphot", "lum_flame", "radius_gspphot", "mass_flame", "distance_pc"]
     for c in num_cols:
         if c in out.columns:
             out[c] = pd.to_numeric(out[c], errors="coerce")
 
-    # Keep only valid, positive values needed for the plot
+    # Log plots and marker sizing require positive values
     mask = (
         np.isfinite(out["teff_gspphot"]) & (out["teff_gspphot"] > 0) &
         np.isfinite(out["lum_flame"]) & (out["lum_flame"] > 0) &
@@ -285,7 +283,7 @@ def compute_physical_hr_df(df: pd.DataFrame) -> pd.DataFrame:
         "mass_flame"
     ]].copy()
 
-    # Spectral type labels (expects classify_spectral_type to exist)
+    # Coarse spectral labels used when color_mode="spectral"
     out["spectral_type"] = out["teff_gspphot"].apply(classify_spectral_type)
 
     return out
@@ -297,8 +295,7 @@ def make_physical_hr_bubble_fig(
     title: str = "Physical HR Diagram — Gaia DR3 (d ≤ 500 pc)",
 ):
     """Return a Plotly physical HR bubble figure (Teff vs Luminosity) on a dark background."""
-
-    # Choose coloring
+    # color_mode chooses between categorical spectral classes and continuous mass
     if color_mode == "spectral":
         color_col = "spectral_type"
         color_args = dict(category_orders={"spectral_type": ["O", "B", "A", "F", "G", "K", "M"]})
@@ -324,14 +321,13 @@ def make_physical_hr_bubble_fig(
         **color_args,
     )
 
-    # Axes semantics
+    # HR convention: temperature decreases to the right; luminosity is shown in log space
     fig.update_yaxes(type="log", title="Luminosity (L\u2609)")
     fig.update_xaxes(autorange="reversed", title="Effective temperature (K)")
 
-    # --- Dark layout + force TRUE white text (no gray)
     fig.update_layout(
         template="none",
-        height=650,  # let Streamlit control width via use_container_width=True
+        height=650,
         margin=dict(l=80, r=40, t=80, b=70),
 
         plot_bgcolor="black",
@@ -347,7 +343,6 @@ def make_physical_hr_bubble_fig(
         ),
     )
 
-    # --- Axes styling (ticks, labels, lines all white)
     fig.update_xaxes(
         title_font=dict(color="white"),
         tickfont=dict(color="white"),
@@ -355,7 +350,7 @@ def make_physical_hr_bubble_fig(
         linecolor="white",
         showline=True,
         linewidth=1,
-        mirror=True,          # ← esto dibuja arriba también
+        mirror=True,
         ticks="outside",
         ticklen=6,
         tickwidth=1,
@@ -370,7 +365,7 @@ def make_physical_hr_bubble_fig(
         linecolor="white",
         showline=True,
         linewidth=1,
-        mirror=True,          # ← esto dibuja derecha también
+        mirror=True,
         ticks="outside",
         ticklen=6,
         tickwidth=1,
@@ -380,6 +375,7 @@ def make_physical_hr_bubble_fig(
 
     return fig
 
+
 def make_gaia_histogram_fig(
         df: pd.DataFrame,
         column: str,
@@ -387,15 +383,16 @@ def make_gaia_histogram_fig(
         title: str | None = None,
         log_y: bool = False,
 ):
-    """Return a Plotly histogram (dark theme, orange bars, clean labels)."""
+    """
+    Return a Plotly histogram (dark theme) for a numeric Gaia parameter.
 
-    # --- Clean numeric series
+    The input series is coerced to numeric and filtered to finite values
+    to avoid binning artifacts.
+    """
     s = pd.to_numeric(df[column], errors="coerce")
     s = s[np.isfinite(s)]
-
     plot_df = pd.DataFrame({column: s})
 
-    # --- Friendly axis labels mapping
     label_map = {
         "mass_flame": "Stellar Mass (M☉)",
         "radius_gspphot": "Stellar Radius (R☉)",
@@ -403,10 +400,9 @@ def make_gaia_histogram_fig(
         "teff_gspphot": "Effective Temperature (K)",
         "distance_pc": "Distance (pc)",
     }
-
     x_label = label_map.get(column, column.replace("_", " ").title())
 
-    # --- Auto titles
+    # Default titles keep the UI consistent across parameters
     title_map = {
         "mass_flame": "Distribution of Stellar Mass",
         "radius_gspphot": "Distribution of Stellar Radius",
@@ -414,10 +410,8 @@ def make_gaia_histogram_fig(
         "teff_gspphot": "Distribution of Effective Temperature",
         "distance_pc": "Distribution of Stellar Distance",
     }
-
     auto_title = title or title_map.get(column, f"Distribution of {x_label}")
 
-    # --- Histogram
     fig = px.histogram(
         plot_df,
         x=column,
@@ -425,14 +419,12 @@ def make_gaia_histogram_fig(
         title=f"<b>{auto_title}</b>",
     )
 
-    # --- Orange bars
     fig.update_traces(
         marker_color="#FF8C00",
         marker_line_color="white",
         marker_line_width=0.4,
     )
 
-    # --- Layout (dark background)
     fig.update_layout(
         template="none",
         height=450,
@@ -452,7 +444,6 @@ def make_gaia_histogram_fig(
         yaxis_title="<b>Star Count</b>",
     )
 
-    # --- Axes styling
     fig.update_xaxes(
         showline=True,
         linecolor="white",
@@ -490,6 +481,7 @@ def make_gaia_histogram_fig(
 
     return fig
 
+
 def add_gaia_categories(
     df: pd.DataFrame,
     mass_bins=(0.0, 0.5, 1.0, 1.5, 2.0, 5.0, np.inf),
@@ -502,6 +494,7 @@ def add_gaia_categories(
     out["mass_flame"] = pd.to_numeric(out["mass_flame"], errors="coerce")
     out["distance_pc"] = pd.to_numeric(out["distance_pc"], errors="coerce")
 
+    # Categories require valid temperature, mass, and distance
     mask = (
         np.isfinite(out["teff_gspphot"]) & (out["teff_gspphot"] > 0) &
         np.isfinite(out["mass_flame"]) & (out["mass_flame"] > 0) &
@@ -519,12 +512,13 @@ def add_gaia_categories(
     out["mass_bin"] = pd.cut(out["mass_flame"], bins=list(mass_bins), labels=mass_labels, right=False, include_lowest=True)
     out["distance_bin"] = pd.cut(out["distance_pc"], bins=list(dist_bins), labels=dist_labels, right=False, include_lowest=True)
 
-    # ordenar categorías para que Plotly no las mezcle raro
+    # Force deterministic ordering in Plotly
     out["spectral_type"] = pd.Categorical(out["spectral_type"], categories=["O","B","A","F","G","K","M"], ordered=True)
     out["mass_bin"] = pd.Categorical(out["mass_bin"], categories=mass_labels, ordered=True)
     out["distance_bin"] = pd.Categorical(out["distance_bin"], categories=dist_labels, ordered=True)
 
     return out
+
 
 def make_gaia_treemap_fig(
     df_cat: pd.DataFrame,
@@ -533,14 +527,14 @@ def make_gaia_treemap_fig(
     fig = px.treemap(
         df_cat,
         path=["spectral_type", "mass_bin", "distance_bin"],
-        color="spectral_type",              # color por tipo espectral
+        color="spectral_type",
         color_discrete_sequence=px.colors.qualitative.Set3
     )
 
     fig.update_traces(
         textinfo="label+percent entry",
         marker=dict(
-            line=dict(width=1, color="black")   # bordes entre cajas
+            line=dict(width=1, color="black")
         ),
         hovertemplate=(
             "<b>%{label}</b><br>"
@@ -570,6 +564,7 @@ def make_gaia_treemap_fig(
 
     return fig
 
+
 def make_topn_bar_fig(
     df: pd.DataFrame,
     metric: str,
@@ -594,7 +589,7 @@ def make_topn_bar_fig(
             .copy()
     )
 
-    # IMPORTANT: prefix so Plotly never treats it as numeric
+    # Prefix prevents Plotly from treating numeric-looking IDs as a continuous axis
     top["source_id_label"] = "ID " + top["source_id"].astype(str)
 
     fig = px.bar(
@@ -614,7 +609,6 @@ def make_topn_bar_fig(
         },
     )
 
-    # Make bars actually pink (not just outlines)
     fig.update_traces(
         marker_color="#9BE90A",
         marker_line=dict(color="white", width=0.6),
@@ -648,7 +642,7 @@ def make_topn_bar_fig(
     )
 
     fig.update_yaxes(
-        type="category",                 # FORCE categorical
+        type="category",
         showline=True,
         linecolor="white",
         tickfont=dict(color="white"),

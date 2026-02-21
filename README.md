@@ -1,4 +1,4 @@
-# astro-spectroscopy-visualization
+# Astrophysics Data Dashboard 
 
 Streamlit app for exploratory astrophysics visualizations using Gaia DR3 and the Sloan Digital Sky Survey (SDSS).
 
